@@ -96,3 +96,17 @@ Then start the controller with `--static-dir ../web-dashboard/dist` (default val
 - **HMAC verification**: Add `--hmac-secret <secret>` to the controller and `--secret <secret>` to each agent. Messages missing or failing the signature check are dropped.
 - **Rate limiting**: `--max-ingest-per-sec N` caps per-device ingest rate (set to `200` by default in docker-compose; `0` disables throttling).
 - **History API**: Enable persistence with `--history-dir <path>` and optional `--history-retention <duration>` (defaults to `5m`). The dashboard fetches `/api/history` to render per-interface sparklines; you can cURL it directly for raw JSON.
+
+## Publishing the dashboard to GitHub Pages
+
+1. **Push to `main`**  
+   The included GitHub Actions workflow (`.github/workflows/pages.yml`) builds `web-dashboard` and deploys the `dist/` output to GitHub Pages on every push to `main`.  
+   *Optional:* If you want to hardcode a different controller origin at build time, add a repository secret named `VITE_CONTROLLER_ORIGIN`. Otherwise the dashboard derives the origin from the browser URL (handy for dev/preview).
+
+2. **Enable Pages**  
+   Under `Settings → Pages`, choose “GitHub Actions” as the build source. After the first successful workflow run, GitHub will display the public URL (typically `https://<user>.github.io/etherwatch`).
+
+3. **Run the backend**  
+   Deploy the Go controller/agent (e.g. Docker on a VPS, Render, Fly.io) with matching `--hmac-secret` and exposed ports (`8080` HTTP/WS, `9000/udp` ingest). The dashboard served from GitHub Pages will communicate with this controller.
+
+Once these steps are complete, the GitHub Pages site stays up-to-date automatically each time you push dashboard changes to `main`.
