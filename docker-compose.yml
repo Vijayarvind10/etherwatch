@@ -1,0 +1,66 @@
+services:
+  controller:
+    build:
+      context: ./controller-go
+    command:
+      - "--udp"
+      - ":9000"
+      - "--http"
+      - ":8080"
+      - "--metrics"
+      - ":9090"
+      - "--offline-after"
+      - "5s"
+      - "--alert-consecutive"
+      - "3"
+      - "--max-ingest-per-sec"
+      - "200"
+      - "--hmac-secret"
+      - "demo-secret"
+      - "--history-dir"
+      - "/app/history"
+      - "--history-retention"
+      - "10m"
+      - "--static-dir"
+      - ""
+    ports:
+      - "9000:9000/udp"
+      - "8080:8080"
+      - "9090:9090"
+    volumes:
+      - controller-history:/app/history
+    restart: unless-stopped
+
+  dashboard:
+    build:
+      context: ./web-dashboard
+      args:
+        CONTROLLER_ORIGIN: http://controller:8080
+    ports:
+      - "5173:80"
+    depends_on:
+      - controller
+    restart: unless-stopped
+
+  agent:
+    build:
+      context: ./agent-go
+    command:
+      - "--controller"
+      - "controller:9000"
+      - "--device"
+      - "sw-01"
+      - "--ifaces"
+      - "eth0,eth1"
+      - "--period"
+      - "1s"
+      - "--spike-prob"
+      - "0.1"
+      - "--secret"
+      - "demo-secret"
+    depends_on:
+      - controller
+    restart: unless-stopped
+
+volumes:
+  controller-history:
