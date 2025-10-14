@@ -34,7 +34,7 @@ function formatMbps(val) {
 
 export default function HistoryChart({samples, label}) {
   if (!samples || samples.length === 0) {
-    return <div style={{fontSize: 12, color: '#666'}}>No recent history</div>
+    return <div className="history-chart__label">No recent history</div>
   }
   const latest = samples[samples.length - 1]
   const ts = new Date(latest.Ts)
@@ -42,20 +42,20 @@ export default function HistoryChart({samples, label}) {
   const txPoints = pointsFor(samples, 'Tx')
 
   return (
-    <div style={{marginTop: 8}}>
-      <div style={{fontSize: 12, marginBottom: 4, display:'flex', justifyContent:'space-between'}}>
+    <div>
+      <div className="history-chart__label" style={{display:'flex',justifyContent:'space-between'}}>
         <span>{label}</span>
-        <span style={{color:'#555'}}>
-          rx {formatMbps(latest.Rx)} / tx {formatMbps(latest.Tx)} Mbps @ {ts.toLocaleTimeString()}
+        <span>
+          rx {formatMbps(latest.Rx)} / tx {formatMbps(latest.Tx)} Mbps · {ts.toLocaleTimeString()}
         </span>
       </div>
-      <svg width={WIDTH} height={HEIGHT} style={{border:'1px solid #eee', borderRadius:4, background:'#fafafa'}}>
-        {rxPoints && <polyline points={rxPoints} fill="none" stroke="#3366ff" strokeWidth="2" />}
-        {txPoints && <polyline points={txPoints} fill="none" stroke="#ff8c42" strokeWidth="2" opacity="0.7" />}
+      <svg width={WIDTH} height={HEIGHT} style={{border:'1px solid rgba(255,255,255,0.08)', borderRadius:8, background:'rgba(8,13,26,0.8)'}}>
+        {rxPoints && <polyline points={rxPoints} fill="none" stroke="rgba(65,209,255,0.9)" strokeWidth="2" />}
+        {txPoints && <polyline points={txPoints} fill="none" stroke="rgba(255,140,66,0.8)" strokeWidth="2" opacity="0.7" />}
       </svg>
-      <div style={{fontSize: 11, color:'#777', marginTop:4}}>
-        <span style={{marginRight:8}}><span style={{color:'#3366ff'}}>●</span> rx</span>
-        <span><span style={{color:'#ff8c42'}}>●</span> tx</span>
+      <div className="history-chart__label" style={{marginTop:4}}>
+        <span style={{marginRight:8}}><span style={{color:'rgba(65,209,255,0.9)'}}>●</span> rx</span>
+        <span><span style={{color:'rgba(255,140,66,0.9)'}}>●</span> tx</span>
       </div>
     </div>
   )
