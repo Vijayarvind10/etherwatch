@@ -83,8 +83,8 @@ function App(){
           <span className="hero-tag">EtherWatch · Live Telemetry</span>
           <h1>Live packets. Real-time intuition.</h1>
           <p>
-            Vijay’s personalized EtherWatch cockpit: anomaly detection, streaming telemetry, and history-aware insights
-            designed to resonate with fellow engineers.
+            A compact EtherWatch cockpit that highlights anomaly detection, streaming telemetry, and history-aware insights
+            for busy network engineers.
           </p>
           <div className="hero-summary">
             <div className="summary-card">
