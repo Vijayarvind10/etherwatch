@@ -7,7 +7,7 @@ const STATUS_STYLES = {
   OFFLINE: 'badge--offline',
 }
 
-export default function DeviceCard({d, controllerOrigin}){
+export default function DeviceCard({d, controllerOrigin, demoMode}){
   const [expanded, setExpanded] = useState(false)
   const [history, setHistory] = useState({})
   const ifaceKey = useMemo(()=> (d.ifaces || []).map(ifc => ifc.name).join(','), [d.ifaces])
@@ -25,6 +25,7 @@ export default function DeviceCard({d, controllerOrigin}){
   const avgLatency = aggregates.count ? aggregates.lat / aggregates.count : 0
 
   useEffect(()=>{
+    if (demoMode) return
     if (!expanded || !ifaceKey) return
     let cancelled = false
 
@@ -64,7 +65,7 @@ export default function DeviceCard({d, controllerOrigin}){
       cancelled = true
       clearInterval(interval)
     }
-  }, [expanded, ifaceKey, controllerOrigin, d.id, d.ifaces])
+  }, [expanded, ifaceKey, controllerOrigin, d.id, d.ifaces, demoMode])
 
   const formatMbps = val => (val / 1e6).toFixed(1)
   const badgeClass = STATUS_STYLES[d.status] || STATUS_STYLES.OK
@@ -114,7 +115,7 @@ export default function DeviceCard({d, controllerOrigin}){
               <div>queue · {ifc.q}</div>
               <div>latency · {ifc.lat_ms?.toFixed(2)} ms</div>
             </div>
-            {expanded && (
+            {expanded && !demoMode && (
               <div className="history-chart">
                 {history[ifc.name]?.loading && <div className="history-chart__label">Loading history…</div>}
                 {history[ifc.name]?.error && <div className="history-chart__label" style={{color:'var(--alert)'}}>History error: {history[ifc.name].error}</div>}
@@ -123,13 +124,18 @@ export default function DeviceCard({d, controllerOrigin}){
                 )}
               </div>
             )}
+            {expanded && demoMode && (
+              <div className="history-chart__label" style={{color:'var(--text-secondary)'}}>
+                History trails are disabled in demo mode.
+              </div>
+            )}
           </div>
         ))}
       </div>
 
       {d.ifaces && d.ifaces.length > 0 && (
         <button className="device-card__toggle" onClick={()=> setExpanded(v => !v)}>
-          {expanded ? 'Hide history' : 'Show history'}
+          {expanded ? 'Hide history' : demoMode ? 'Show demo info' : 'Show history'}
         </button>
       )}
     </div>

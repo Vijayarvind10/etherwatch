@@ -7,6 +7,7 @@ Mini distributed switch telemetry: agents emit NDJSON over UDP, the Go controlle
 - `controller-go`: UDP ingest with optional HMAC verification and per-device rate limiting, in-memory EWMA state, consecutive-breach anomaly detector, persistent history (Badger) with REST access, WebSocket hub, and Prometheus gauges.
 - `agent-go`: synthetic telemetry generator configurable for device id, interfaces, period, spike probability, and shared secret for message signing.
 - `web-dashboard`: Vite + React single-page app showing live device status, alert banner, per-interface details, and lightweight history charts sourced from the controller history API.
+  *No-backend demo mode*: when the dashboard cannot reach a controller, it automatically switches to a synthetic telemetry stream so you can showcase the UI without running any services.
 
 ## Local Development
 
@@ -50,6 +51,8 @@ Mini distributed switch telemetry: agents emit NDJSON over UDP, the Go controlle
    ```
 
    Launch additional agents with different `--device` ids to simulate a fleet.
+
+   > Tip: the dashboard falls back to a synthetic demo stream if it can’t reach the controller. Use this for slides or quick demos when you can’t run the backend.
 
 Prometheus metrics are available at <http://localhost:9090/metrics> (`etherwatch_device_status`, `etherwatch_iface_status`, rx/tx/drops gauges, etc.). The controller WebSocket endpoint lives at `ws://localhost:8080/ws`, and historical samples can be queried at `/api/history?device=<id>&iface=<name>&minutes=5`.
 
