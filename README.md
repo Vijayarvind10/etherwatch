@@ -56,6 +56,21 @@ Mini distributed switch telemetry: agents emit NDJSON over UDP, the Go controlle
 
 Prometheus metrics are available at <http://localhost:9090/metrics> (`etherwatch_device_status`, `etherwatch_iface_status`, rx/tx/drops gauges, etc.). The controller WebSocket endpoint lives at `ws://localhost:8080/ws`, and historical samples can be queried at `/api/history?device=<id>&iface=<name>&minutes=5`.
 
+### Replay a real telemetry snippet (M-Lab)
+
+If you want to show EtherWatch with authentic values but don’t have a live lab handy, the repo includes a small sample derived from Measurement Lab throughput tests.
+
+```bash
+# start the controller in one terminal
+cd controller-go
+go run . --udp :9000 --http :8080 --metrics :9090 --offline-after 5s
+
+# in another terminal, replay the sample CSV over UDP
+python scripts/mlab_replay.py 127.0.0.1:9000 data/mlab_sample.csv
+```
+
+Each row in `data/mlab_sample.csv` becomes one telemetry packet per second (rx/tx throughput, min RTT, retransmits, queue depth). The dashboard immediately renders the stream, and you can keep or edit that CSV to build your own demo scenarios.
+
 ## Docker Compose
 
 The repository includes lightweight Dockerfiles for each service. Build everything and start the stack:
