@@ -27,6 +27,7 @@ type IfaceState struct {
 	EWMALat  float64
 	Status   string
 	breaches int
+	GapCount uint64
 }
 
 type Device struct {
@@ -74,7 +75,11 @@ func (s *State) Ingest(m Msg) {
 	}
 
 	ifs.mu.Lock()
+	prevSeq := ifs.Last.Seq
 	sample := Sample{Ts: m.TsUnixMs, Rx: m.RxBps, Tx: m.TxBps, Drops: m.Drops, Q: m.Q, Lat: m.LatMs, Seq: m.Seq}
+	if prevSeq != 0 && m.Seq > prevSeq+1 {
+		ifs.GapCount += m.Seq - prevSeq - 1
+	}
 	ifs.Last = sample
 	ifs.Buf = append(ifs.Buf, sample)
 	if len(ifs.Buf) > 128 {

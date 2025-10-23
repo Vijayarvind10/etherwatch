@@ -9,6 +9,20 @@ Mini distributed switch telemetry: agents emit NDJSON over UDP, the Go controlle
 - `web-dashboard`: Vite + React single-page app showing live device status, alert banner, per-interface details, and lightweight history charts sourced from the controller history API.
   *No-backend demo mode*: when the dashboard cannot reach a controller, it automatically switches to a synthetic telemetry stream so you can showcase the UI without running any services.
 
+```mermaid
+flowchart LR
+  subgraph Agents
+    A1[Go agent] -->|UDP + HMAC| CTRL
+    A2[sysfs reader] -->|UDP| CTRL
+    A3[M-Lab replay] -->|UDP| CTRL
+  end
+  CTRL[EtherWatch controller]
+  CTRL -->|WebSocket snapshots| UI[React dashboard]
+  CTRL -->|/api/history| UI
+  CTRL -->|Prometheus metrics| PROM[Prometheus/Grafana]
+  CTRL -->|TTL samples| BADGER[(Badger history store)]
+```
+
 ## Local Development
 
 1. **Controller**
@@ -54,6 +68,20 @@ Mini distributed switch telemetry: agents emit NDJSON over UDP, the Go controlle
 
    > Tip: the dashboard falls back to a synthetic demo stream if it can’t reach the controller. Use this for slides or quick demos when you can’t run the backend.
 
+   To stream *real* interface counters on Linux, add `--source sysfs` (and optional `--latency-ms`):
+
+   ```bash
+   go run . \
+     --controller 127.0.0.1:9000 \
+     --device laptop \
+     --ifaces wlan0 \
+     --period 2s \
+     --source sysfs \
+     --latency-ms 2.0
+   ```
+
+   EtherWatch reads `/sys/class/net/<iface>/statistics/*` to compute throughput and drops; the controller automatically switches to the live stream as soon as packets arrive.
+
 Prometheus metrics are available at <http://localhost:9090/metrics> (`etherwatch_device_status`, `etherwatch_iface_status`, rx/tx/drops gauges, etc.). The controller WebSocket endpoint lives at `ws://localhost:8080/ws`, and historical samples can be queried at `/api/history?device=<id>&iface=<name>&minutes=5`.
 
 ### Replay a real telemetry snippet (M-Lab)
@@ -70,6 +98,23 @@ python scripts/mlab_replay.py 127.0.0.1:9000 data/mlab_sample.csv
 ```
 
 Each row in `data/mlab_sample.csv` becomes one telemetry packet per second (rx/tx throughput, min RTT, retransmits, queue depth). The dashboard immediately renders the stream, and you can keep or edit that CSV to build your own demo scenarios.
+
+### Demo controls and timeline
+
+Open the GitHub Pages build or run `npm run dev` locally—you’ll see a “Demo controls” drawer that lets you:
+
+- Trigger preset scenarios (Healthy, Latency Spike, High Drops) with one click.
+- Enter custom Rx/Tx/drop/latency numbers for a bespoke snapshot.
+- Watch the last 30 samples via the animated telemetry timeline.
+
+Use those buttons while narrating the story; when the controller is reachable the page automatically leaves demo mode and displays the live feed.
+
+### Quick demo script
+
+1. `make controller` – start the controller with history retention.
+2. `make demo` – replay the Measurement Lab sample in a second terminal, or `make agent-sysfs IFACE=<iface>` to stream your NIC.
+3. Open the hosted dashboard (or `npm run dev`) and use “Demo controls” to highlight scenarios.
+4. Visit `http://localhost:9090/metrics` to show Prometheus gauges or load your Grafana dashboard.
 
 ## Docker Compose
 

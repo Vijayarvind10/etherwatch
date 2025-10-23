@@ -14,10 +14,11 @@ var (
 	gDrops       = prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: "etherwatch_drops_total", Help: "drops"}, []string{"device", "iface"})
 	gStatus      = prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: "etherwatch_device_status", Help: "device status (1=OK,0=ALERT,-1=OFFLINE)"}, []string{"device"})
 	gIfaceStatus = prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: "etherwatch_iface_status", Help: "iface status (1=OK,0=ALERT,-1=OFFLINE)"}, []string{"device", "iface"})
+	gSeqGap      = prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: "etherwatch_iface_seq_gap_total", Help: "total missing packets detected for an interface"}, []string{"device", "iface"})
 )
 
 func registerMetrics(mux *http.ServeMux, s *State) {
-	prometheus.MustRegister(gRx, gTx, gDrops, gStatus, gIfaceStatus)
+	prometheus.MustRegister(gRx, gTx, gDrops, gStatus, gIfaceStatus, gSeqGap)
 	mux.Handle("/metrics", promhttp.Handler())
 
 	// simple background updater
@@ -32,6 +33,7 @@ func registerMetrics(mux *http.ServeMux, s *State) {
 					gTx.WithLabelValues(d.ID, name).Set(ifs.Last.Tx)
 					gDrops.WithLabelValues(d.ID, name).Set(float64(ifs.Last.Drops))
 					gIfaceStatus.WithLabelValues(d.ID, name).Set(statusValue(ifs.Status))
+					gSeqGap.WithLabelValues(d.ID, name).Set(float64(ifs.GapCount))
 					ifs.mu.Unlock()
 				}
 				// status mapping
