@@ -7,7 +7,7 @@ const STATUS_STYLES = {
   OFFLINE: 'badge--offline',
 }
 
-export default function DeviceCard({d, controllerOrigin, demoMode}){
+export default function DeviceCard({d, controllerOrigin, demoMode, onOpenDetails}){
   const [expanded, setExpanded] = useState(false)
   const [history, setHistory] = useState({})
   const ifaceKey = useMemo(()=> (d.ifaces || []).map(ifc => ifc.name).join(','), [d.ifaces])
@@ -138,6 +138,9 @@ export default function DeviceCard({d, controllerOrigin, demoMode}){
           {expanded ? 'Hide history' : demoMode ? 'Show demo info' : 'Show history'}
         </button>
       )}
+      <button className="device-card__details" onClick={()=> onOpenDetails?.(d)}>
+        View details
+      </button>
     </div>
   )
 }

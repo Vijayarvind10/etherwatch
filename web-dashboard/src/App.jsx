@@ -5,6 +5,9 @@ import DeviceCard from './DeviceCard'
 import PacketFlowAnimation from './PacketFlowAnimation'
 import DemoControlPanel from './DemoControlPanel'
 import TimelineChart from './TimelineChart'
+import AlertTimeline from './AlertTimeline'
+import DeviceModal from './DeviceModal'
+import IntegrationPanel from './IntegrationPanel'
 import './styles.css'
 
 const STATUS_FILTERS = ['ALL', 'OK', 'ALERT', 'OFFLINE']
@@ -20,6 +23,8 @@ function App(){
   const [timeline, setTimeline] = useState([])
   const [connectionStatus, setConnectionStatus] = useState('connecting')
   const [messageCount, setMessageCount] = useState(0)
+  const [selectedDevice, setSelectedDevice] = useState(null)
+  const [alertEvents, setAlertEvents] = useState([])
 
   const controllerOrigin = useMemo(()=> inferHttpOrigin(), [])
   const devices = state.devices ?? []
@@ -42,6 +47,7 @@ function App(){
   const demoTimerRef = useRef(null)
   const receivedRealData = useRef(false)
   const wsRef = useRef(null)
+  const prevStatusRef = useRef(new Map())
 
   useEffect(()=>{
     const ws = connectWS('/ws')
@@ -61,6 +67,7 @@ function App(){
         setMessageCount(count => count + 1)
         receivedRealData.current = true
         setConnectionStatus('live')
+        trackAlertEvents(msg.devices || [])
         if (demoMode) {
           stopDemo()
         }
@@ -145,8 +152,43 @@ function App(){
     })
   }, [devices, search, statusFilter])
 
+  const trackAlertEvents = devicesList => {
+    const prevStatus = prevStatusRef.current
+    const now = Date.now()
+    const additions = []
+    devicesList.forEach(dev => {
+      const prev = prevStatus.get(dev.id)
+      if (dev.status && dev.status !== prev) {
+        if (dev.status === 'ALERT' || dev.status === 'OFFLINE') {
+          additions.push({
+            id: `${dev.id}-${now}`,
+            time: now,
+            device: dev.id,
+            status: dev.status,
+            note: dev.status === 'OFFLINE' ? 'No telemetry received' : 'Anomaly threshold breached',
+          })
+        }
+      }
+      prevStatus.set(dev.id, dev.status)
+    })
+    if (additions.length) {
+      setAlertEvents(prev => {
+        const combined = [...additions, ...prev]
+        return combined.slice(0, 20)
+      })
+    }
+  }
+
   return (
     <div className="app-root">
+      <DeviceModal
+        device={selectedDevice}
+        controllerOrigin={controllerOrigin}
+        demoMode={demoMode}
+        open={Boolean(selectedDevice)}
+        onClose={()=> setSelectedDevice(null)}
+      />
+
       <nav className="top-nav">
         <div className="top-nav__brand">EtherWatch<span>demo</span></div>
         <div className={`top-nav__status status--${connectionStatus}`}>
@@ -154,8 +196,8 @@ function App(){
           {statusLabel(connectionStatus, messageCount)}
         </div>
         <div className="top-nav__links">
-          <a href="https://github.com/Vijayarvind10/etherwatch" target="_blank" rel="noreferrer">GitHub</a>
           <a href="http://localhost:9090/metrics" target="_blank" rel="noreferrer">Metrics</a>
+          <a href="#history-api">History API</a>
         </div>
       </nav>
 
@@ -254,7 +296,13 @@ function App(){
         )}
         <div className="device-grid">
           {filteredDevices.map(d=> (
-            <DeviceCard key={d.id} d={d} controllerOrigin={controllerOrigin} demoMode={demoMode} />
+            <DeviceCard
+              key={d.id}
+              d={d}
+              controllerOrigin={controllerOrigin}
+              demoMode={demoMode}
+              onOpenDetails={setSelectedDevice}
+            />
           ))}
         </div>
         {filteredDevices.length === 0 && (
@@ -263,6 +311,8 @@ function App(){
           </div>
         )}
       </section>
+      <AlertTimeline events={alertEvents} />
+      <IntegrationPanel />
       <footer className="app-footer">
         © {new Date().getFullYear()} Vijay Arvind Ramamoorthy
       </footer>
