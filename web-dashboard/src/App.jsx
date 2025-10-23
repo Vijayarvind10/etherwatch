@@ -18,8 +18,10 @@ function App(){
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [timeline, setTimeline] = useState([])
-  const controllerOrigin = useMemo(()=> inferHttpOrigin(), [])
+  const [connectionStatus, setConnectionStatus] = useState('connecting')
+  const [messageCount, setMessageCount] = useState(0)
 
+  const controllerOrigin = useMemo(()=> inferHttpOrigin(), [])
   const devices = state.devices ?? []
   const alerts = useMemo(()=> devices.filter(d => d.status && d.status !== 'OK'), [devices])
   const offline = useMemo(()=> devices.filter(d => d.status === 'OFFLINE'), [devices])
@@ -39,30 +41,47 @@ function App(){
 
   const demoTimerRef = useRef(null)
   const receivedRealData = useRef(false)
+  const wsRef = useRef(null)
 
   useEffect(()=>{
     const ws = connectWS('/ws')
-    ws.onmessage = (ev)=>{
-      try{
-        const msg = JSON.parse(ev.data)
-        setState(msg)
-        receivedRealData.current = true
-        if (demoMode) stopDemo()
-      }catch(e){ console.error(e) }
-    }
-    ws.onopen = ()=> {
+    wsRef.current = ws
+    ws.onopen = () => {
+      setConnectionStatus(receivedRealData.current ? 'live' : 'connected')
       if (demoMode && !receivedRealData.current) {
-        startDemo(demoScenario)
+        startDemo(demoScenario, true)
       } else if (demoMode) {
         stopDemo()
       }
     }
-    const activateDemo = ()=>{
-      if (!receivedRealData.current) startDemo(demoScenario)
+    ws.onmessage = ev => {
+      try{
+        const msg = JSON.parse(ev.data)
+        setState(msg)
+        setMessageCount(count => count + 1)
+        receivedRealData.current = true
+        setConnectionStatus('live')
+        if (demoMode) {
+          stopDemo()
+        }
+      }catch(err){
+        console.error(err)
+      }
     }
-    ws.onerror = activateDemo
-    ws.onclose = activateDemo
-    return ()=> {
+    const activateDemo = ()=>{
+      if (!receivedRealData.current) {
+        startDemo(demoScenario, true)
+      }
+    }
+    ws.onerror = () => {
+      setConnectionStatus('demo')
+      activateDemo()
+    }
+    ws.onclose = () => {
+      setConnectionStatus('demo')
+      activateDemo()
+    }
+    return ()=>{
       ws.close()
       stopDemo()
     }
@@ -79,21 +98,17 @@ function App(){
     }
     setTimeline(prev=>{
       const next = [...prev, point]
-      if (next.length > MAX_TIMELINE_POINTS) {
-        next.shift()
-      }
+      if (next.length > MAX_TIMELINE_POINTS) next.shift()
       return next
     })
   }, [devices, totals.rx, totals.tx, totals.drops])
 
-  const formatGbps = (bps)=>{
-    if (!bps) return '0.0'
-    return (bps / 1e9).toFixed(2)
-  }
+  const formatGbps = bps => (bps ? (bps / 1e9).toFixed(2) : '0.0')
 
-  const startDemo = (scenario)=>{
+  const startDemo = (scenario, fromFallback = false)=>{
     if (demoTimerRef.current) clearInterval(demoTimerRef.current)
     setDemoMode(true)
+    if (!fromFallback) setConnectionStatus('demo')
     const base = createScenarioSnapshot(scenario)
     setState(base)
     demoTimerRef.current = setInterval(()=>{
@@ -107,29 +122,43 @@ function App(){
       demoTimerRef.current = null
     }
     setDemoMode(false)
+    setConnectionStatus(receivedRealData.current ? 'live' : 'connected')
   }
 
-  const handleScenarioSelect = (scenario)=>{
+  const handleScenarioSelect = scenario=>{
     setDemoScenario(scenario)
     startDemo(scenario)
   }
 
-  const handleCustomDemo = (payload)=>{
+  const handleCustomDemo = payload=>{
     setState(createCustomDemoSnapshot(payload))
-    if (!demoMode) setDemoMode(true)
+    setDemoMode(true)
+    setConnectionStatus('demo')
     if (demoTimerRef.current) clearInterval(demoTimerRef.current)
   }
 
   const filteredDevices = useMemo(()=>{
     return devices.filter(device=>{
-      const matchesSearch = device.id.toLowerCase().includes(search.toLowerCase())
-      const matchesStatus = statusFilter === 'ALL' || device.status === statusFilter
-      return matchesSearch && matchesStatus
+      const matchSearch = device.id.toLowerCase().includes(search.toLowerCase())
+      const matchStatus = statusFilter === 'ALL' || device.status === statusFilter
+      return matchSearch && matchStatus
     })
   }, [devices, search, statusFilter])
 
   return (
     <div className="app-root">
+      <nav className="top-nav">
+        <div className="top-nav__brand">EtherWatch<span>demo</span></div>
+        <div className={`top-nav__status status--${connectionStatus}`}>
+          <span className="status-dot" />
+          {statusLabel(connectionStatus, messageCount)}
+        </div>
+        <div className="top-nav__links">
+          <a href="https://github.com/Vijayarvind10/etherwatch" target="_blank" rel="noreferrer">GitHub</a>
+          <a href="http://localhost:9090/metrics" target="_blank" rel="noreferrer">Metrics</a>
+        </div>
+      </nav>
+
       <DemoControlPanel
         open={panelOpen}
         onClose={()=> setPanelOpen(false)}
@@ -204,16 +233,12 @@ function App(){
         <div className="board-controls">
           <input
             type="search"
+            className="board-search"
             placeholder="Search device..."
             value={search}
             onChange={e=> setSearch(e.target.value)}
-            className="board-search"
           />
-          <select
-            value={statusFilter}
-            onChange={e=> setStatusFilter(e.target.value)}
-            className="board-filter"
-          >
+          <select className="board-filter" value={statusFilter} onChange={e=> setStatusFilter(e.target.value)}>
             {STATUS_FILTERS.map(opt=> (
               <option key={opt} value={opt}>{opt}</option>
             ))}
@@ -248,58 +273,58 @@ function App(){
 function createScenarioSnapshot(scenario){
   const now = Date.now()
   switch (scenario) {
-    case 'latency-spike':
-      return {
-        t: now,
-        devices: [
-          makeDevice('core-nyc', 'ALERT', [
-            makeIface('xe-0/0/1', 1.4, 1.2, 14, 28, 18.0, 'ALERT'),
-            makeIface('xe-0/0/2', 1.1, 0.9, 6, 12, 16.2),
-          ]),
-          makeDevice('agg-sfo', 'OK', [
-            makeIface('et-1/0/49', 0.8, 0.82, 1, 3, 1.1),
-            makeIface('et-1/0/50', 0.83, 0.81, 0, 2, 0.9),
-          ]),
-          makeDevice('leaf-chi', 'OK', [
-            makeIface('eth9', 0.52, 0.50, 0, 1, 1.0),
-          ]),
-        ],
-      }
-    case 'high-drops':
-      return {
-        t: now,
-        devices: [
-          makeDevice('fabric-sw1', 'ALERT', [
-            makeIface('uplink-a', 0.9, 0.85, 220, 24, 6.4, 'ALERT'),
-            makeIface('uplink-b', 0.88, 0.82, 198, 22, 5.9, 'ALERT'),
-          ]),
-          makeDevice('edge-gw', 'OK', [
-            makeIface('wan1', 0.61, 0.57, 8, 4, 2.1),
-            makeIface('wan2', 0.59, 0.55, 5, 3, 1.9),
-          ]),
-          makeDevice('lab-appliance', 'OFFLINE', [
-            makeIface('eth0', 0, 0, 0, 0, 0, 'OFFLINE'),
-          ]),
-        ],
-      }
-    case 'healthy':
-    default:
-      return {
-        t: now,
-        devices: [
-          makeDevice('spine-01', 'OK', [
-            makeIface('ethernet1', 1.2, 0.8, 3, 2, 0.8),
-            makeIface('ethernet2', 1.05, 0.88, 0, 1, 0.7),
-          ]),
-          makeDevice('leaf-11', 'OK', [
-            makeIface('uplink1', 0.6, 0.55, 2, 2, 0.9),
-            makeIface('uplink2', 0.58, 0.6, 0, 3, 0.9),
-          ]),
-          makeDevice('leaf-24', 'OK', [
-            makeIface('ethernet5', 0.44, 0.41, 1, 1, 1.1),
-          ]),
-        ],
-      }
+  case 'latency-spike':
+    return {
+      t: now,
+      devices: [
+        makeDevice('core-nyc', 'ALERT', [
+          makeIface('xe-0/0/1', 1.4, 1.2, 14, 28, 18.0, 'ALERT'),
+          makeIface('xe-0/0/2', 1.1, 0.9, 6, 12, 16.2),
+        ]),
+        makeDevice('agg-sfo', 'OK', [
+          makeIface('et-1/0/49', 0.8, 0.82, 1, 3, 1.1),
+          makeIface('et-1/0/50', 0.83, 0.81, 0, 2, 0.9),
+        ]),
+        makeDevice('leaf-chi', 'OK', [
+          makeIface('eth9', 0.52, 0.50, 0, 1, 1.0),
+        ]),
+      ],
+    }
+  case 'high-drops':
+    return {
+      t: now,
+      devices: [
+        makeDevice('fabric-sw1', 'ALERT', [
+          makeIface('uplink-a', 0.9, 0.85, 220, 24, 6.4, 'ALERT'),
+          makeIface('uplink-b', 0.88, 0.82, 198, 22, 5.9, 'ALERT'),
+        ]),
+        makeDevice('edge-gw', 'OK', [
+          makeIface('wan1', 0.61, 0.57, 8, 4, 2.1),
+          makeIface('wan2', 0.59, 0.55, 5, 3, 1.9),
+        ]),
+        makeDevice('lab-appliance', 'OFFLINE', [
+          makeIface('eth0', 0, 0, 0, 0, 0, 'OFFLINE'),
+        ]),
+      ],
+    }
+  case 'healthy':
+  default:
+    return {
+      t: now,
+      devices: [
+        makeDevice('spine-01', 'OK', [
+          makeIface('ethernet1', 1.2, 0.8, 3, 2, 0.8),
+          makeIface('ethernet2', 1.05, 0.88, 0, 1, 0.7),
+        ]),
+        makeDevice('leaf-11', 'OK', [
+          makeIface('uplink1', 0.6, 0.55, 2, 2, 0.9),
+          makeIface('uplink2', 0.58, 0.6, 0, 3, 0.9),
+        ]),
+        makeDevice('leaf-24', 'OK', [
+          makeIface('ethernet5', 0.44, 0.41, 1, 1, 1.1),
+        ]),
+      ],
+    }
   }
 }
 
@@ -369,6 +394,19 @@ function makeIface(name, rxGbps, txGbps, drops, q, latMs, status='OK'){
     q,
     lat_ms: latMs,
     status,
+  }
+}
+
+function statusLabel(status, messages){
+  switch (status) {
+  case 'live':
+    return messages ? `Live telemetry · ${messages} samples` : 'Live telemetry'
+  case 'connected':
+    return 'Connected · waiting for samples'
+  case 'demo':
+    return 'Demo stream active'
+  default:
+    return 'Connecting…'
   }
 }
 

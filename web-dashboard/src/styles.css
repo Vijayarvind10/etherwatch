@@ -27,6 +27,105 @@ body {
   padding: 32px;
 }
 
+.top-nav {
+  width: min(1200px, 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.top-nav__brand {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.top-nav__brand span {
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  margin-left: 8px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.top-nav__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.top-nav__status.status--live {
+  border-color: rgba(74, 222, 128, 0.4);
+  background: rgba(74, 222, 128, 0.12);
+  color: var(--ok);
+}
+
+.top-nav__status.status--demo {
+  border-color: rgba(65, 209, 255, 0.4);
+  background: rgba(65, 209, 255, 0.14);
+  color: var(--accent);
+}
+
+.top-nav__status.status--connected {
+  border-color: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.top-nav__status.status--connecting {
+  border-color: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.45);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.4);
+}
+
+.status--live .status-dot {
+  background: var(--ok);
+  box-shadow: 0 0 12px rgba(74, 222, 128, 0.6);
+}
+
+.status--demo .status-dot {
+  background: var(--accent);
+  box-shadow: 0 0 12px rgba(65, 209, 255, 0.6);
+}
+
+.top-nav__links {
+  display: inline-flex;
+  gap: 12px;
+}
+
+.top-nav__links a {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-decoration: none;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.top-nav__links a:hover {
+  border-color: rgba(65, 209, 255, 0.4);
+  color: var(--accent);
+}
+
 code {
   background: rgba(255, 255, 255, 0.08);
   padding: 2px 6px;
