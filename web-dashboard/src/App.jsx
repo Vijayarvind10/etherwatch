@@ -7,6 +7,7 @@ import TimelineChart from './TimelineChart'
 import AlertTimeline from './AlertTimeline'
 import DeviceModal from './DeviceModal'
 import IntegrationPanel from './IntegrationPanel'
+import EcosystemConstellationDemo from './components/ui/ecosystem-constellation-demo'
 import './styles.css'
 
 const STATUS_FILTERS = ['ALL', 'OK', 'ALERT', 'OFFLINE']
@@ -227,6 +228,7 @@ function App(){
       />
 
       <div className="app-root">
+        <EcosystemConstellationDemo />
         {/* KPI Strip */}
         <div className="kpi-strip">
           <div className="kpi-card">
