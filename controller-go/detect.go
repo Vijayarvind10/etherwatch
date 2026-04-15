@@ -5,6 +5,16 @@ import (
 	"time"
 )
 
+type Thresholds struct {
+	MaxDrops int
+	MaxQ     int
+	MaxLatMs float64
+}
+
+func DefaultThresholds() Thresholds {
+	return Thresholds{MaxDrops: 100, MaxQ: 20, MaxLatMs: 5.0}
+}
+
 func startDetector(s *State) {
 	ticker := time.NewTicker(1 * time.Second)
 	for range ticker.C {
@@ -24,7 +34,7 @@ func (s *State) evaluateStatuses(now time.Time) StateSnapshot {
 		deviceStatus := "OFFLINE"
 		for _, ifs := range d.Ifaces {
 			ifs.mu.Lock()
-			status := evaluateIfaceStatus(ifs, now, s.offlineAfter, s.alertConsec)
+			status := evaluateIfaceStatus(ifs, now, s.offlineAfter, s.alertConsec, s.thresholds)
 			ifs.Status = status
 			if status == "ALERT" {
 				deviceStatus = "ALERT"
@@ -38,13 +48,13 @@ func (s *State) evaluateStatuses(now time.Time) StateSnapshot {
 	return s.snapshotLocked()
 }
 
-func evaluateIfaceStatus(ifs *IfaceState, now time.Time, offlineAfter time.Duration, alertConsec int) string {
+func evaluateIfaceStatus(ifs *IfaceState, now time.Time, offlineAfter time.Duration, alertConsec int, th Thresholds) string {
 	if now.Sub(ifs.LastSeen) > offlineAfter {
 		ifs.breaches = 0
 		return "OFFLINE"
 	}
 
-	breach := ifs.Last.Drops > 100 || ifs.Last.Q > 20 || ifs.Last.Lat > 5.0
+	breach := int(ifs.Last.Drops) > th.MaxDrops || int(ifs.Last.Q) > th.MaxQ || ifs.Last.Lat > th.MaxLatMs
 	if breach {
 		ifs.breaches++
 	} else {

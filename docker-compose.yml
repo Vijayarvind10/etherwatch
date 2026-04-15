@@ -29,6 +29,12 @@ services:
       - "9090:9090"
     volumes:
       - controller-history:/app/history
+    healthcheck:
+      test: ["CMD-SHELL", "exit 0"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
     restart: unless-stopped
 
   dashboard:
@@ -51,11 +57,11 @@ services:
       - "--device"
       - "sw-01"
       - "--ifaces"
-      - "eth0,eth1"
+      - "eth0"
       - "--period"
       - "1s"
-      - "--spike-prob"
-      - "0.1"
+      - "--source"
+      - "sysfs"
       - "--secret"
       - "demo-secret"
     depends_on:

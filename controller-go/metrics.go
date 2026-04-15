@@ -15,10 +15,28 @@ var (
 	gStatus      = prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: "etherwatch_device_status", Help: "device status (1=OK,0=ALERT,-1=OFFLINE)"}, []string{"device"})
 	gIfaceStatus = prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: "etherwatch_iface_status", Help: "iface status (1=OK,0=ALERT,-1=OFFLINE)"}, []string{"device", "iface"})
 	gSeqGap      = prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: "etherwatch_iface_seq_gap_total", Help: "total missing packets detected for an interface"}, []string{"device", "iface"})
+
+	cUDPReceived = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "etherwatch_udp_packets_received_total",
+		Help: "Total UDP packets received",
+	})
+	cHMACFailures = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "etherwatch_hmac_failures_total",
+		Help: "Total HMAC validation failures",
+	})
+	cRateLimitHits = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "etherwatch_rate_limit_hits_total",
+		Help: "Total packets dropped by rate limiter",
+	})
+	hIngestLatency = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "etherwatch_ingest_latency_seconds",
+		Help:    "Duration from UDP receive to state store",
+		Buckets: prometheus.DefBuckets,
+	})
 )
 
 func registerMetrics(mux *http.ServeMux, s *State) {
-	prometheus.MustRegister(gRx, gTx, gDrops, gStatus, gIfaceStatus, gSeqGap)
+	prometheus.MustRegister(gRx, gTx, gDrops, gStatus, gIfaceStatus, gSeqGap, cUDPReceived, cHMACFailures, cRateLimitHits, hIngestLatency)
 	mux.Handle("/metrics", promhttp.Handler())
 
 	// simple background updater

@@ -43,9 +43,10 @@ type State struct {
 	hub          *Hub
 	alertConsec  int
 	history      HistoryStore
+	thresholds   Thresholds
 }
 
-func NewState(offlineAfter time.Duration, alertConsec int, hub *Hub, history HistoryStore) *State {
+func NewState(offlineAfter time.Duration, alertConsec int, hub *Hub, history HistoryStore, th Thresholds) *State {
 	if alertConsec < 1 {
 		alertConsec = 1
 	}
@@ -58,6 +59,7 @@ func NewState(offlineAfter time.Duration, alertConsec int, hub *Hub, history His
 		hub:          hub,
 		alertConsec:  alertConsec,
 		history:      history,
+		thresholds:   th,
 	}
 }
 

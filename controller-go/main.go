@@ -21,7 +21,14 @@ func main() {
 	historyDir := flag.String("history-dir", "", "directory for persisted history (empty disables)")
 	historyRetention := flag.Duration("history-retention", 5*time.Minute, "duration to retain persisted samples")
 	staticDir := flag.String("static-dir", "../web-dashboard/dist", "path to built dashboard assets (empty to disable)")
+	maxDrops := flag.Int("alert-drops", 100, "drop count threshold for anomaly breach")
+	maxQ := flag.Int("alert-queue", 20, "queue depth threshold for anomaly breach")
+	maxLatMs := flag.Float64("alert-latency-ms", 5.0, "latency threshold in ms for anomaly breach")
+	allowedOrigin := flag.String("ws-allowed-origin", "", "restrict WebSocket origin (empty = allow all)")
+	logLevel := flag.String("log-level", "info", "log level: debug|info|warn|error")
 	flag.Parse()
+
+	_ = *logLevel // reserved for future structured logging integration
 
 	historyStore, err := openHistoryStore(*historyDir, *historyRetention)
 	if err != nil {
@@ -35,9 +42,20 @@ func main() {
 	hub := NewHub()
 	go hub.Run()
 
-	state := NewState(*offlineAfter, *alertConsec, hub, historyStore)
+	th := Thresholds{MaxDrops: *maxDrops, MaxQ: *maxQ, MaxLatMs: *maxLatMs}
+	state := NewState(*offlineAfter, *alertConsec, hub, historyStore, th)
+	hub.AllowedOrigin = *allowedOrigin
 
-	go startUDPListener(*udpAddr, state, []byte(*hmacSecret), NewRateLimiter(*maxIngest, time.Second))
+	limiter := NewRateLimiter(*maxIngest, time.Second)
+	go startUDPListener(*udpAddr, state, []byte(*hmacSecret), limiter)
+
+	// periodically evict stale rate-limiter buckets
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		for range ticker.C {
+			limiter.Cleanup(time.Now())
+		}
+	}()
 	go startDetector(state)
 
 	// metrics on separate port
@@ -54,6 +72,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", hub.ServeWS)
 	registerHistoryAPI(mux, state)
+	registerHealth(mux, state)
 
 	staticRegistered := false
 	if *staticDir != "" {
@@ -79,10 +98,12 @@ func main() {
 		})
 	}
 
+	srv := &http.Server{Addr: *httpAddr, Handler: mux}
 	log.Printf("http listening %s", *httpAddr)
-	if err := http.ListenAndServe(*httpAddr, mux); err != nil {
-		log.Fatalf("http server failed: %v", err)
+	if err := serveWithGracefulShutdown(srv, 10*time.Second); err != nil {
+		log.Fatalf("http server: %v", err)
 	}
+	log.Printf("shutdown complete")
 }
 
 func spaHandler(root string, fs http.Handler) http.Handler {

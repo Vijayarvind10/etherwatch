@@ -1,7 +1,13 @@
-.PHONY: controller agent-synthetic agent-sysfs demo dashboard-build clean
+.PHONY: run controller controller-dev agent-synthetic agent-sysfs demo dashboard-build clean
+
+run:
+	docker compose up --build
 
 controller:
 	cd controller-go && go run . --udp :9000 --http :8080 --metrics :9090 --offline-after 5s --history-dir ./history --history-retention 10m
+
+controller-dev:
+	cd controller-go && go run . --udp :9000 --http :8080 --metrics :9090 --offline-after 5s --history-dir ./history --history-retention 10m --alert-drops 100 --alert-queue 20 --alert-latency-ms 5.0 --ws-allowed-origin "" --log-level debug
 
 agent-synthetic:
 	cd agent-go && go run . --controller 127.0.0.1:9000 --device demo-switch --ifaces eth0,eth1 --period 1s --spike-prob 0.2
