@@ -2,7 +2,6 @@ import React, {useEffect, useMemo, useRef, useState} from 'react'
 import {createRoot} from 'react-dom/client'
 import {connectWS, inferHttpOrigin} from './ws'
 import DeviceCard from './DeviceCard'
-import PacketFlowAnimation from './PacketFlowAnimation'
 import DemoControlPanel from './DemoControlPanel'
 import TimelineChart from './TimelineChart'
 import AlertTimeline from './AlertTimeline'
@@ -32,6 +31,15 @@ function App(){
   const offline = useMemo(()=> devices.filter(d => d.status === 'OFFLINE'), [devices])
   const lastUpdate = state.t ? new Date(state.t).toLocaleTimeString() : '—'
 
+  const metricsOrigin = useMemo(()=>{
+    const env = import.meta.env.VITE_METRICS_ORIGIN?.trim()
+    if (env) return env
+    try {
+      const u = new URL(controllerOrigin.startsWith('http') ? controllerOrigin : `http://${controllerOrigin}`)
+      return `http://${u.hostname}:9090`
+    } catch { return 'http://localhost:9090' }
+  }, [controllerOrigin])
+
   const totals = useMemo(()=>{
     return devices.reduce((acc, device)=>{
       device.ifaces?.forEach(ifc=>{
@@ -50,50 +58,38 @@ function App(){
   const prevStatusRef = useRef(new Map())
 
   useEffect(()=>{
-    const ws = connectWS('/ws')
-    wsRef.current = ws
-    ws.onopen = () => {
-      setConnectionStatus(receivedRealData.current ? 'live' : 'connected')
-      if (demoMode && !receivedRealData.current) {
-        startDemo(demoScenario, true)
-      } else if (demoMode) {
-        stopDemo()
-      }
-    }
-    ws.onmessage = ev => {
-      try{
-        const msg = JSON.parse(ev.data)
-        setState(msg)
-        setMessageCount(count => count + 1)
-        receivedRealData.current = true
-        setConnectionStatus('live')
-        trackAlertEvents(msg.devices || [])
-        if (demoMode) {
-          stopDemo()
+    setConnectionStatus('connecting')
+    const ctrl = connectWS('/ws', {
+      onopen: () => {
+        setConnectionStatus(receivedRealData.current ? 'live' : 'connected')
+      },
+      onmessage: ev => {
+        try{
+          const msg = JSON.parse(ev.data)
+          setState(msg)
+          setMessageCount(count => count + 1)
+          receivedRealData.current = true
+          setConnectionStatus('live')
+          trackAlertEvents(msg.devices || [])
+          if (demoMode) stopDemo()
+        }catch(err){
+          console.error(err)
         }
-      }catch(err){
-        console.error(err)
-      }
-    }
-    const activateDemo = ()=>{
-      if (!receivedRealData.current) {
-        startDemo(demoScenario, true)
-      }
-    }
-    ws.onerror = () => {
-      setConnectionStatus('demo')
-      activateDemo()
-    }
-    ws.onclose = () => {
-      setConnectionStatus('demo')
-      activateDemo()
-    }
+      },
+      onerror: () => {
+        if (!receivedRealData.current) setConnectionStatus('offline')
+      },
+      onclose: () => {
+        setConnectionStatus(prev => prev === 'live' ? 'reconnecting' : 'offline')
+      },
+    })
+    wsRef.current = ctrl
     return ()=>{
-      ws.close()
+      ctrl.close()
       stopDemo()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [demoScenario])
+  }, [])
 
   useEffect(()=>{
     if (!devices.length) return
@@ -110,7 +106,7 @@ function App(){
     })
   }, [devices, totals.rx, totals.tx, totals.drops])
 
-  const formatGbps = bps => (bps ? (bps / 1e9).toFixed(2) : '0.0')
+  const formatGbps = bps => (bps ? (bps / 1e9).toFixed(2) : '0.00')
 
   const startDemo = (scenario, fromFallback = false)=>{
     if (demoTimerRef.current) clearInterval(demoTimerRef.current)
@@ -179,8 +175,14 @@ function App(){
     }
   }
 
+  const chipClass = (filter) => {
+    if (statusFilter !== filter) return 'filter-chip'
+    const map = {ALL:'filter-chip active-all', OK:'filter-chip active-ok', ALERT:'filter-chip active-alert', OFFLINE:'filter-chip active-offline'}
+    return map[filter] || 'filter-chip active-all'
+  }
+
   return (
-    <div className="app-root">
+    <div>
       <DeviceModal
         device={selectedDevice}
         controllerOrigin={controllerOrigin}
@@ -190,14 +192,15 @@ function App(){
       />
 
       <nav className="top-nav">
-        <div className="top-nav__brand">EtherWatch<span>demo</span></div>
+        <div className="top-nav__brand">EtherWatch<span>· telemetry</span></div>
         <div className={`top-nav__status status--${connectionStatus}`}>
           <span className="status-dot" />
           {statusLabel(connectionStatus, messageCount)}
         </div>
         <div className="top-nav__links">
-          <a href="http://localhost:9090/metrics" target="_blank" rel="noreferrer">Metrics</a>
-          <a href="#history-api">History API</a>
+          <a href={`${metricsOrigin}/metrics`} target="_blank" rel="noreferrer">Metrics</a>
+          <a href="#integrations">API</a>
+          <button className="dev-tools-btn" onClick={()=> setPanelOpen(true)}>Dev tools</button>
         </div>
       </nav>
 
@@ -211,111 +214,93 @@ function App(){
         onApplyCustom={handleCustomDemo}
       />
 
-      <header className="hero">
-        <div className="hero-copy">
-          <span className="hero-tag">EtherWatch · Live Telemetry</span>
-          <h1>Live packets. Real-time intuition.</h1>
-          <p>
-            A compact EtherWatch cockpit that highlights anomaly detection, streaming telemetry, and history-aware insights
-            for busy network engineers.
-          </p>
-          <div className="hero-summary">
-            <div className="summary-card">
-              <span>Devices online</span>
-              <strong>{devices.length}</strong>
+      <div className="app-root">
+        {/* KPI Strip */}
+        <div className="kpi-strip">
+          <div className="kpi-card">
+            <div className="kpi-card__label">Devices online</div>
+            <div className="kpi-card__value">{devices.length}</div>
+          </div>
+          <div className="kpi-card">
+            <div className="kpi-card__label">Active alerts</div>
+            <div className={`kpi-card__value ${alerts.length > 0 ? 'value--danger' : ''}`}>
+              {alerts.length}
             </div>
-            <div className="summary-card">
-              <span>Alerts glowing</span>
-              <strong style={{color: alerts.length ? 'var(--alert)' : 'var(--ok)'}}>
-                {alerts.length}
-              </strong>
-            </div>
-            <div className="summary-card">
-              <span>Interfaces streaming</span>
-              <strong>{totals.ifaces}</strong>
-            </div>
-            <div className="summary-card">
-              <span>Aggregate throughput</span>
-              <strong>{formatGbps(totals.rx + totals.tx)} Gbps</strong>
-            </div>
-            {demoMode && (
-              <div className="summary-card" style={{border:'1px solid rgba(65,209,255,0.35)', background:'var(--accent-soft)'}}>
-                <span>Demo mode</span>
-                <strong style={{color:'var(--accent)'}}>{demoScenario}</strong>
+          </div>
+          <div className="kpi-card">
+            <div className="kpi-card__label">Interfaces</div>
+            <div className="kpi-card__value">{totals.ifaces}</div>
+          </div>
+          <div className="kpi-card">
+            <div className="kpi-card__label">Aggregate throughput</div>
+            <div className="kpi-card__value">{formatGbps(totals.rx + totals.tx)} <span style={{fontSize:14,fontWeight:400,color:'var(--text-2)'}}>Gbps</span></div>
+          </div>
+        </div>
+
+        <div className="kpi-strip-meta">
+          Last update · {lastUpdate} · {offline.length > 0 ? `${offline.length} offline` : 'all reachable'}
+          {demoMode && <span style={{color:'var(--accent)', marginLeft:12}}>· Dev demo: {demoScenario}</span>}
+        </div>
+
+        {/* Device Board */}
+        <section className="device-board">
+          <div className="board-header">
+            <h2>Fabric devices</h2>
+            <div style={{display:'flex', gap:8, alignItems:'center', flexWrap:'wrap'}}>
+              <input
+                type="search"
+                className="board-search"
+                placeholder="Search device…"
+                value={search}
+                onChange={e=> setSearch(e.target.value)}
+              />
+              <div className="filter-chips">
+                {STATUS_FILTERS.map(f=> (
+                  <button key={f} className={chipClass(f)} onClick={()=> setStatusFilter(f)}>{f}</button>
+                ))}
               </div>
-            )}
+            </div>
           </div>
-          <div className="hero-actions">
-            <button className="hero-action-btn" onClick={()=> setPanelOpen(true)}>
-              Open demo controls
-            </button>
-            {demoMode ? (
-              <button className="hero-action-btn secondary" onClick={stopDemo}>
-                Resume live feed
-              </button>
-            ) : (
-              <button className="hero-action-btn secondary" onClick={()=> startDemo(demoScenario)}>
-                Start fallback demo
-              </button>
-            )}
-          </div>
-        </div>
-        <PacketFlowAnimation />
-      </header>
 
-      <TimelineChart data={timeline} />
+          {alerts.length > 0 && (
+            <div className="alert-banner">
+              ⚠ {alerts.map((d,i)=> `${i ? ' · ' : ''}${d.id} (${d.status})`).join('')}
+            </div>
+          )}
 
-      <section className="device-board">
-        <div className="board-header">
-          <h2>Fabric devices</h2>
-          <div className="board-meta">
-            Last update · {lastUpdate} · Offline: {offline.length}
-          </div>
-        </div>
-        <div className="board-controls">
-          <input
-            type="search"
-            className="board-search"
-            placeholder="Search device..."
-            value={search}
-            onChange={e=> setSearch(e.target.value)}
-          />
-          <select className="board-filter" value={statusFilter} onChange={e=> setStatusFilter(e.target.value)}>
-            {STATUS_FILTERS.map(opt=> (
-              <option key={opt} value={opt}>{opt}</option>
+          <div className="device-grid">
+            {filteredDevices.map(d=> (
+              <DeviceCard
+                key={d.id}
+                d={d}
+                controllerOrigin={controllerOrigin}
+                demoMode={demoMode}
+                onOpenDetails={setSelectedDevice}
+              />
             ))}
-          </select>
-        </div>
-        {alerts.length > 0 && (
-          <div className="summary-card" style={{borderRadius:'16px', background:'rgba(255, 107, 107, 0.08)', border:'1px solid rgba(255, 107, 107, 0.25)'}}>
-            <span style={{color:'rgba(255, 255, 255, 0.6)'}}>Attention</span>
-            <strong style={{color:'var(--alert)'}}>
-              {alerts.map((d, idx)=> `${idx ? ' · ' : ''}${d.id} (${d.status})`).join('')}
-            </strong>
           </div>
-        )}
-        <div className="device-grid">
-          {filteredDevices.map(d=> (
-            <DeviceCard
-              key={d.id}
-              d={d}
-              controllerOrigin={controllerOrigin}
-              demoMode={demoMode}
-              onOpenDetails={setSelectedDevice}
-            />
-          ))}
-        </div>
-        {filteredDevices.length === 0 && (
-          <div className="empty-state">
-            No devices match your filters. {demoMode ? 'Adjust the scenario or filters to see synthetic telemetry.' : 'Start an agent to begin streaming telemetry.'}
-          </div>
-        )}
-      </section>
-      <AlertTimeline events={alertEvents} />
-      <IntegrationPanel />
-      <footer className="app-footer">
-        © {new Date().getFullYear()} Vijay Arvind Ramamoorthy
-      </footer>
+
+          {filteredDevices.length === 0 && (
+            <div className="empty-state">
+              {connectionStatus === 'offline'
+                ? 'Controller is unreachable — check that the controller service is running.'
+                : connectionStatus === 'reconnecting'
+                  ? 'Reconnecting to controller — last known data shown above when available.'
+                  : demoMode
+                    ? 'Adjust scenario or filters to see telemetry.'
+                    : 'No devices match your filters. Start an agent to begin streaming telemetry.'}
+            </div>
+          )}
+        </section>
+
+        <TimelineChart data={timeline} />
+        <AlertTimeline events={alertEvents} />
+        <IntegrationPanel metricsOrigin={metricsOrigin} />
+
+        <footer className="app-footer">
+          © {new Date().getFullYear()} Vijay Arvind Ramamoorthy
+        </footer>
+      </div>
     </div>
   )
 }
@@ -384,11 +369,7 @@ function mutateScenarioSnapshot(prev, scenario){
   clone.devices.forEach(device=>{
     device.ifaces?.forEach(ifc=>{
       if (ifc.status === 'OFFLINE') {
-        ifc.rx_bps = 0
-        ifc.tx_bps = 0
-        ifc.drops = 0
-        ifc.q = 0
-        ifc.lat_ms = 0
+        ifc.rx_bps = 0; ifc.tx_bps = 0; ifc.drops = 0; ifc.q = 0; ifc.lat_ms = 0
         return
       }
       const jitter = (Math.random()-0.5) * 0.18
@@ -420,9 +401,8 @@ function mutateScenarioSnapshot(prev, scenario){
 }
 
 function createCustomDemoSnapshot({deviceId='custom-node', rxGbps=1, txGbps=0.8, drops=10, latencyMs=2, status='OK'}){
-  const now = Date.now()
   return {
-    t: now,
+    t: Date.now(),
     devices: [
       makeDevice(deviceId, status, [
         makeIface('custom-if0', rxGbps, txGbps, drops, Math.max(0, Math.round(drops / 12)), latencyMs, status),
@@ -431,32 +411,20 @@ function createCustomDemoSnapshot({deviceId='custom-node', rxGbps=1, txGbps=0.8,
   }
 }
 
-function makeDevice(id, status, ifaces){
-  return {id, status, ifaces}
-}
+function makeDevice(id, status, ifaces){ return {id, status, ifaces} }
 
 function makeIface(name, rxGbps, txGbps, drops, q, latMs, status='OK'){
-  return {
-    name,
-    rx_bps: rxGbps * 1e9,
-    tx_bps: txGbps * 1e9,
-    drops,
-    q,
-    lat_ms: latMs,
-    status,
-  }
+  return { name, rx_bps: rxGbps*1e9, tx_bps: txGbps*1e9, drops, q, lat_ms: latMs, status }
 }
 
 function statusLabel(status, messages){
   switch (status) {
-  case 'live':
-    return messages ? `Live telemetry · ${messages} samples` : 'Live telemetry'
-  case 'connected':
-    return 'Connected · waiting for samples'
-  case 'demo':
-    return 'Demo stream active'
-  default:
-    return 'Connecting…'
+  case 'live':         return messages ? `Live · ${messages.toLocaleString()} samples` : 'Live'
+  case 'connected':    return 'Connected · awaiting data'
+  case 'reconnecting': return 'Reconnecting…'
+  case 'offline':      return 'Controller offline'
+  case 'demo':         return 'Demo mode'
+  default:             return 'Initializing…'
   }
 }
 

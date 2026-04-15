@@ -1,35 +1,30 @@
 import React, {useMemo} from 'react'
 
 export default function TimelineChart({data}){
-  const points = useMemo(()=>{
+  const pts = useMemo(()=>{
     if (!data?.length) return {rx:'', tx:'', drops:''}
-    const minRx = Math.min(...data.map(d=> d.rx))
-    const maxRx = Math.max(...data.map(d=> d.rx))
-    const minTx = Math.min(...data.map(d=> d.tx))
-    const maxTx = Math.max(...data.map(d=> d.tx))
-    const minDrops = Math.min(...data.map(d=> d.drops))
-    const maxDrops = Math.max(...data.map(d=> d.drops))
-
-    const mapPoints = (values, min, max, height)=>{
+    const mapLine = (values, h) => {
+      const min = Math.min(...values)
+      const max = Math.max(...values)
       const spread = max - min || 1
-      return values.map((val, idx)=>{
-        const x = (idx / Math.max(1, values.length - 1)) * 100
-        const y = height - ((val - min) / spread) * height
-        return `${x},${y}`
+      return values.map((v, i)=>{
+        const x = (i / Math.max(1, values.length - 1)) * 100
+        const y = h - ((v - min) / spread) * (h - 4) - 2
+        return `${x},${y.toFixed(1)}`
       }).join(' ')
     }
-
     return {
-      rx: mapPoints(data.map(d=> d.rx), minRx, maxRx, 60),
-      tx: mapPoints(data.map(d=> d.tx), minTx, maxTx, 60),
-      drops: mapPoints(data.map(d=> d.drops), minDrops, maxDrops, 60),
+      rx:    mapLine(data.map(d=> d.rx),    56),
+      tx:    mapLine(data.map(d=> d.tx),    56),
+      drops: mapLine(data.map(d=> d.drops), 56),
     }
   }, [data])
 
   if (!data?.length) {
     return (
       <section className="timeline-card">
-        <div className="timeline-card__empty">Timeline will appear when telemetry is flowing.</div>
+        <div className="timeline-card__header"><h3>Aggregate throughput</h3></div>
+        <div className="timeline-card__empty">Awaiting telemetry…</div>
       </section>
     )
   }
@@ -39,17 +34,20 @@ export default function TimelineChart({data}){
   return (
     <section className="timeline-card">
       <div className="timeline-card__header">
-        <h3>Telemetry timeline (last 30 samples)</h3>
+        <h3>Aggregate throughput · last {data.length} samples</h3>
         <div className="timeline-card__metrics">
-          <span>Rx {formatGbps(latest.rx)} Gbps</span>
-          <span>Tx {formatGbps(latest.tx)} Gbps</span>
+          <span>Rx {fmtGbps(latest.rx)} Gbps</span>
+          <span>Tx {fmtGbps(latest.tx)} Gbps</span>
           <span>Drops {latest.drops}</span>
         </div>
       </div>
       <svg className="timeline-card__chart" viewBox="0 0 100 60" preserveAspectRatio="none">
-        {points.rx && <polyline points={points.rx} fill="none" stroke="rgba(65,209,255,0.85)" strokeWidth="1.5" />}
-        {points.tx && <polyline points={points.tx} fill="none" stroke="rgba(255,140,66,0.8)" strokeWidth="1.5" />}
-        {points.drops && <polyline points={points.drops} fill="none" stroke="rgba(255,107,107,0.75)" strokeWidth="1.2" strokeDasharray="4 3" />}
+        {/* grid */}
+        <line x1="0" y1="20" x2="100" y2="20" stroke="#111" strokeWidth="0.5" vectorEffect="non-scaling-stroke" />
+        <line x1="0" y1="40" x2="100" y2="40" stroke="#111" strokeWidth="0.5" vectorEffect="non-scaling-stroke" />
+        {pts.rx    && <polyline points={pts.rx}    fill="none" stroke="var(--accent)" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />}
+        {pts.tx    && <polyline points={pts.tx}    fill="none" stroke="#ff8c42"       strokeWidth="1.5" vectorEffect="non-scaling-stroke" opacity="0.85" />}
+        {pts.drops && <polyline points={pts.drops} fill="none" stroke="var(--danger)" strokeWidth="1"   vectorEffect="non-scaling-stroke" strokeDasharray="4 3" />}
       </svg>
       <div className="timeline-card__legend">
         <span><span className="legend-dot legend-dot--rx" /> Rx</span>
@@ -60,7 +58,4 @@ export default function TimelineChart({data}){
   )
 }
 
-function formatGbps(bps){
-  if (!bps) return '0.00'
-  return (bps / 1e9).toFixed(2)
-}
+function fmtGbps(bps){ return bps ? (bps/1e9).toFixed(2) : '0.00' }

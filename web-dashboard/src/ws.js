@@ -1,40 +1,39 @@
 export function inferHttpOrigin() {
   const envOrigin = import.meta.env.VITE_CONTROLLER_ORIGIN?.trim()
-  if (envOrigin) {
-    return envOrigin
-  }
-
+  if (envOrigin) return envOrigin
   const {protocol, hostname, port} = window.location
-  const isViteDefaultPort = port === '5173' || port === '4173'
-
-  if (isViteDefaultPort) {
-    // default controller port during local dev
-    return `${protocol}//${hostname}:8080`
-  }
-
-  const hostPort = port ? `:${port}` : ''
-  return `${protocol}//${hostname}${hostPort}`
+  if (port === '5173' || port === '4173') return `${protocol}//${hostname}:8080`
+  return `${protocol}//${hostname}${port ? ':' + port : ''}`
 }
 
 function toWsOrigin(origin) {
-  if (origin.startsWith('ws://') || origin.startsWith('wss://')) {
-    return origin
-  }
-  if (origin.startsWith('https://')) {
-    return `wss://${origin.slice('https://'.length)}`
-  }
-  if (origin.startsWith('http://')) {
-    return `ws://${origin.slice('http://'.length)}`
-  }
-  return origin
+  if (origin.startsWith('ws://') || origin.startsWith('wss://')) return origin
+  if (origin.startsWith('https://')) return `wss://${origin.slice(8)}`
+  return `ws://${origin.slice(7)}`
 }
 
-export function connectWS(path){
-  const wsOrigin = toWsOrigin(inferHttpOrigin())
-  const url = `${wsOrigin}${path}`
-  const ws = new WebSocket(url)
-  ws.onopen = ()=> console.log('ws open')
-  ws.onclose = ()=> console.log('ws close')
-  ws.onerror = (e)=> console.error('ws err', e)
-  return ws
+export function connectWS(path, callbacks = {}) {
+  let ws = null
+  let retryDelay = 1000
+  const MAX_DELAY = 30000
+  let stopped = false
+
+  function connect() {
+    if (stopped) return
+    const url = `${toWsOrigin(inferHttpOrigin())}${path}`
+    ws = new WebSocket(url)
+    ws.onopen = e => { retryDelay = 1000; callbacks.onopen?.(e) }
+    ws.onmessage = e => callbacks.onmessage?.(e)
+    ws.onerror = e => callbacks.onerror?.(e)
+    ws.onclose = e => {
+      callbacks.onclose?.(e)
+      if (!stopped) {
+        setTimeout(connect, retryDelay)
+        retryDelay = Math.min(retryDelay * 2, MAX_DELAY)
+      }
+    }
+  }
+
+  connect()
+  return { close() { stopped = true; ws?.close() } }
 }
