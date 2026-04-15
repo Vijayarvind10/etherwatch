@@ -1,11 +1,8 @@
 import React, {useEffect, useMemo, useState} from 'react'
 import HistoryChart from './HistoryChart'
 
-const STATUS_STYLES = {
-  OK: 'badge--ok',
-  ALERT: 'badge--alert',
-  OFFLINE: 'badge--offline',
-}
+const STATUS_CLASS = { OK: 'status-ok', ALERT: 'status-alert', OFFLINE: 'status-offline' }
+const BADGE_CLASS  = { OK: 'badge--ok',  ALERT: 'badge--alert',  OFFLINE: 'badge--offline' }
 
 export default function DeviceCard({d, controllerOrigin, demoMode, onOpenDetails}){
   const [expanded, setExpanded] = useState(false)
@@ -41,19 +38,12 @@ export default function DeviceCard({d, controllerOrigin, demoMode, onOpenDetails
           if (!cancelled){
             setHistory(prev => ({
               ...prev,
-              [ifc.name]: {
-                samples: json.samples || [],
-                loading: false,
-                error: null,
-              },
+              [ifc.name]: { samples: json.samples || [], loading: false, error: null },
             }))
           }
         }catch(err){
           if (!cancelled){
-            setHistory(prev => ({
-              ...prev,
-              [ifc.name]: {samples: [], loading: false, error: err.message},
-            }))
+            setHistory(prev => ({...prev, [ifc.name]: {samples:[], loading:false, error:err.message}}))
           }
         }
       }))
@@ -61,86 +51,99 @@ export default function DeviceCard({d, controllerOrigin, demoMode, onOpenDetails
 
     fetchHistory()
     const interval = setInterval(fetchHistory, 10000)
-    return ()=> {
-      cancelled = true
-      clearInterval(interval)
-    }
+    return ()=>{ cancelled = true; clearInterval(interval) }
   }, [expanded, ifaceKey, controllerOrigin, d.id, d.ifaces, demoMode])
 
-  const formatMbps = val => (val / 1e6).toFixed(1)
-  const badgeClass = STATUS_STYLES[d.status] || STATUS_STYLES.OK
+  const fmtGbps = val => val ? (val/1e9).toFixed(3) : '0.000'
+  const statusKey = d.status || 'OK'
+  const cardClass = `device-card ${STATUS_CLASS[statusKey] || ''}`
+  const badgeClass = `device-card__badge ${BADGE_CLASS[statusKey] || BADGE_CLASS.OK}`
 
   return (
-    <div className="device-card">
+    <div className={cardClass}>
       <div className="device-card__head">
         <div className="device-card__title">
-          <span>Device</span>
           <strong>{d.id}</strong>
+          <span>{aggregates.count} interface{aggregates.count !== 1 ? 's' : ''}</span>
         </div>
-        <div className={`device-card__badge ${badgeClass}`}>
-          {d.status || 'OK'}
+        <div className={badgeClass}>
+          <span className="badge-dot" />
+          {statusKey}
         </div>
       </div>
 
       <div className="device-card__metrics">
         <div className="metric-block">
-          <span>Total Rx</span>
-          <strong>{formatMbps(aggregates.rx)} Mbps</strong>
+          <span>Rx</span>
+          <strong>{fmtGbps(aggregates.rx)} Gbps</strong>
         </div>
         <div className="metric-block">
-          <span>Total Tx</span>
-          <strong>{formatMbps(aggregates.tx)} Mbps</strong>
+          <span>Tx</span>
+          <strong>{fmtGbps(aggregates.tx)} Gbps</strong>
         </div>
         <div className="metric-block">
-          <span>Frame drops</span>
-          <strong>{aggregates.drops}</strong>
+          <span>Drops</span>
+          <strong style={aggregates.drops > 0 ? {color:'var(--danger)'} : {}}>{aggregates.drops}</strong>
         </div>
         <div className="metric-block">
-          <span>Avg latency</span>
-          <strong>{avgLatency.toFixed(2)} ms</strong>
+          <span>Avg lat</span>
+          <strong style={avgLatency > 5 ? {color:'var(--danger)'} : avgLatency > 2 ? {color:'var(--warning)'} : {}}>
+            {avgLatency.toFixed(2)} ms
+          </strong>
         </div>
       </div>
 
       <div className="iface-list">
-        {d.ifaces && d.ifaces.map(ifc => (
-          <div key={ifc.name} className="iface-row">
-            <div className="iface-row__header">
-              <h4>{ifc.name}</h4>
-              <div className="iface-row__badge">{ifc.status || 'OK'}</div>
-            </div>
-            <div className="iface-row__stats">
-              <div>rx · {formatMbps(ifc.rx_bps)} Mbps</div>
-              <div>tx · {formatMbps(ifc.tx_bps)} Mbps</div>
-              <div>drops · {ifc.drops}</div>
-              <div>queue · {ifc.q}</div>
-              <div>latency · {ifc.lat_ms?.toFixed(2)} ms</div>
-            </div>
-            {expanded && !demoMode && (
-              <div className="history-chart">
-                {history[ifc.name]?.loading && <div className="history-chart__label">Loading history…</div>}
-                {history[ifc.name]?.error && <div className="history-chart__label" style={{color:'var(--alert)'}}>History error: {history[ifc.name].error}</div>}
-                {!history[ifc.name]?.loading && !history[ifc.name]?.error && (
-                  <HistoryChart samples={history[ifc.name]?.samples} label={`${ifc.name} · last 5 min`} />
-                )}
+        {d.ifaces && d.ifaces.map(ifc => {
+          const ifcStatus = ifc.status || 'OK'
+          return (
+            <div key={ifc.name} className="iface-row">
+              <div className="iface-row__header">
+                <h4>{ifc.name}</h4>
+                <div className="iface-row__badge" style={{color: ifcStatus === 'ALERT' ? 'var(--danger)' : ifcStatus === 'OFFLINE' ? 'var(--muted)' : 'var(--ok)'}}>
+                  {ifcStatus}
+                </div>
               </div>
-            )}
-            {expanded && demoMode && (
-              <div className="history-chart__label" style={{color:'var(--text-secondary)'}}>
-                History trails are disabled in demo mode.
+              <div className="iface-row__stats">
+                <span>↑ {fmtGbps(ifc.rx_bps)} Gbps</span>
+                <span>↓ {fmtGbps(ifc.tx_bps)} Gbps</span>
+                <span>drops {ifc.drops}</span>
+                <span>q {ifc.q}</span>
+                <span>lat {ifc.lat_ms?.toFixed(2)} ms</span>
               </div>
-            )}
-          </div>
-        ))}
+              {expanded && !demoMode && (
+                <div className="history-chart">
+                  {history[ifc.name]?.loading && <div className="history-chart__label">Loading…</div>}
+                  {history[ifc.name]?.error && (
+                    <div className="history-chart__label" style={{color:'var(--danger)'}}>
+                      {history[ifc.name].error}
+                    </div>
+                  )}
+                  {!history[ifc.name]?.loading && !history[ifc.name]?.error && (
+                    <HistoryChart samples={history[ifc.name]?.samples} label={`${ifc.name} · last 5 min`} />
+                  )}
+                </div>
+              )}
+              {expanded && demoMode && (
+                <div className="history-chart__label" style={{color:'var(--text-3)'}}>
+                  History disabled in dev mode
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
 
-      {d.ifaces && d.ifaces.length > 0 && (
-        <button className="device-card__toggle" onClick={()=> setExpanded(v => !v)}>
-          {expanded ? 'Hide history' : demoMode ? 'Show demo info' : 'Show history'}
+      <div className="device-card__actions">
+        {d.ifaces && d.ifaces.length > 0 && (
+          <button className="device-card__toggle" onClick={()=> setExpanded(v => !v)}>
+            {expanded ? 'Hide history' : 'Show history'}
+          </button>
+        )}
+        <button className="device-card__details" onClick={()=> onOpenDetails?.(d)}>
+          View details →
         </button>
-      )}
-      <button className="device-card__details" onClick={()=> onOpenDetails?.(d)}>
-        View details
-      </button>
+      </div>
     </div>
   )
 }
