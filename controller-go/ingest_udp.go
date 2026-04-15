@@ -36,6 +36,7 @@ func startUDPListener(addr string, state *State, secret []byte, limiter *RateLim
 			log.Printf("udp read error: %v", err)
 			continue
 		}
+		cUDPReceived.Inc()
 		var m Msg
 		if err := json.Unmarshal(buf[:n], &m); err != nil {
 			log.Printf("json unmarshal failed: %v", err)
@@ -43,6 +44,7 @@ func startUDPListener(addr string, state *State, secret []byte, limiter *RateLim
 		}
 		if limiter != nil && !limiter.Allow(m.DeviceID, time.Now()) {
 			log.Printf("rate limit exceeded for device %s", m.DeviceID)
+			cRateLimitHits.Inc()
 			continue
 		}
 		if len(secret) > 0 {
@@ -53,9 +55,12 @@ func startUDPListener(addr string, state *State, secret []byte, limiter *RateLim
 			expected := computeSignature(m, secret)
 			if !hmac.Equal([]byte(expected), []byte(m.Sig)) {
 				log.Printf("invalid signature for device %s iface %s", m.DeviceID, m.Iface)
+				cHMACFailures.Inc()
 				continue
 			}
 		}
+		t0 := time.Now()
 		state.Ingest(m)
+		hIngestLatency.Observe(time.Since(t0).Seconds())
 	}
 }

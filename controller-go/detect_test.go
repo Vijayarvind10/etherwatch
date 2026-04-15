@@ -10,13 +10,13 @@ func TestEvaluateIfaceStatusConsecutive(t *testing.T) {
 	ifs := &IfaceState{LastSeen: now}
 
 	ifs.Last = Sample{Drops: 150}
-	if status := evaluateIfaceStatus(ifs, now, 5*time.Second, 3); status != "OK" {
+	if status := evaluateIfaceStatus(ifs, now, 5*time.Second, 3, DefaultThresholds()); status != "OK" {
 		t.Fatalf("expected OK after first breach, got %s", status)
 	}
-	if status := evaluateIfaceStatus(ifs, now, 5*time.Second, 3); status != "OK" {
+	if status := evaluateIfaceStatus(ifs, now, 5*time.Second, 3, DefaultThresholds()); status != "OK" {
 		t.Fatalf("expected OK after second breach, got %s", status)
 	}
-	if status := evaluateIfaceStatus(ifs, now, 5*time.Second, 3); status != "ALERT" {
+	if status := evaluateIfaceStatus(ifs, now, 5*time.Second, 3, DefaultThresholds()); status != "ALERT" {
 		t.Fatalf("expected ALERT after third breach, got %s", status)
 	}
 	if ifs.breaches != 3 {
@@ -24,7 +24,7 @@ func TestEvaluateIfaceStatusConsecutive(t *testing.T) {
 	}
 
 	ifs.Last = Sample{Drops: 0}
-	if status := evaluateIfaceStatus(ifs, now, 5*time.Second, 3); status != "OK" {
+	if status := evaluateIfaceStatus(ifs, now, 5*time.Second, 3, DefaultThresholds()); status != "OK" {
 		t.Fatalf("expected OK after recovery, got %s", status)
 	}
 	if ifs.breaches != 0 {
@@ -32,7 +32,7 @@ func TestEvaluateIfaceStatusConsecutive(t *testing.T) {
 	}
 
 	ifs.LastSeen = now.Add(-6 * time.Second)
-	if status := evaluateIfaceStatus(ifs, now, 5*time.Second, 3); status != "OFFLINE" {
+	if status := evaluateIfaceStatus(ifs, now, 5*time.Second, 3, DefaultThresholds()); status != "OFFLINE" {
 		t.Fatalf("expected OFFLINE when past offlineAfter, got %s", status)
 	}
 	if ifs.breaches != 0 {
@@ -42,7 +42,7 @@ func TestEvaluateIfaceStatusConsecutive(t *testing.T) {
 
 func TestStateEvaluateStatusesAggregatesDevice(t *testing.T) {
 	now := time.Now()
-	state := NewState(5*time.Second, 3, nil, &noopHistory{})
+	state := NewState(5*time.Second, 3, nil, &noopHistory{}, DefaultThresholds())
 
 	iface := &IfaceState{LastSeen: now}
 	device := &Device{ID: "sw-01", Ifaces: map[string]*IfaceState{"eth0": iface}}

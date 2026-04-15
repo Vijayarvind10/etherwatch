@@ -50,3 +50,17 @@ func (r *RateLimiter) Allow(key string, now time.Time) bool {
 	b.count++
 	return b.count <= r.limit
 }
+
+func (r *RateLimiter) Cleanup(now time.Time) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cutoff := now.Add(-2 * r.window)
+	for key, b := range r.buckets {
+		if b.windowStart.Before(cutoff) {
+			delete(r.buckets, key)
+		}
+	}
+}

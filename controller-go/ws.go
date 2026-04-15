@@ -11,9 +11,10 @@ import (
 )
 
 type Hub struct {
-	clients   map[*websocket.Conn]bool
-	mu        sync.Mutex
-	broadcast chan StateSnapshot
+	clients       map[*websocket.Conn]bool
+	mu            sync.Mutex
+	broadcast     chan StateSnapshot
+	AllowedOrigin string
 }
 
 func NewHub() *Hub {
@@ -41,7 +42,14 @@ func (h *Hub) Run() {
 }
 
 func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
-	upgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(req *http.Request) bool {
+			if h.AllowedOrigin == "" {
+				return true
+			}
+			return req.Header.Get("Origin") == h.AllowedOrigin
+		},
+	}
 	c, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("ws upgrade err: %v", err)

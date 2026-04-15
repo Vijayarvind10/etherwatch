@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -53,6 +54,8 @@ func registerHistoryAPI(mux *http.ServeMux, state *State) {
 			"samples": samples,
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			log.Printf("history response encode error: %v", err)
+		}
 	})
 }
