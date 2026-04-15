@@ -91,6 +91,18 @@ function App(){
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // On GitHub Pages (VITE_DEMO_DEFAULT=true), auto-start demo if no real data arrives within 2.5s
+  useEffect(()=>{
+    if (import.meta.env.VITE_DEMO_DEFAULT !== 'true') return
+    const timer = setTimeout(()=>{
+      if (!receivedRealData.current) {
+        startDemo('healthy')
+      }
+    }, 2500)
+    return ()=> clearTimeout(timer)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useEffect(()=>{
     if (!devices.length) return
     const point = {

@@ -33,6 +33,8 @@ jobs:
           cache-dependency-path: web-dashboard/package-lock.json
       - run: npm ci
       - run: npm run build
+        env:
+          VITE_DEMO_DEFAULT: 'true'
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web-dashboard/dist
