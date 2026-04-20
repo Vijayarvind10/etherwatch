@@ -2,3 +2,4 @@
 **/dist/
 .DS_Store
 controller-go/controller
+agent-go/agent
